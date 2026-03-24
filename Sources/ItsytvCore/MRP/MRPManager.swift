@@ -99,6 +99,20 @@ public final class MRPManager {
         tunnel?.send(message)
     }
 
+    /// Set volume directly (0.0 = muted, 1.0 = max).
+    public func setVolume(_ level: Float) {
+        var vol = MRP_SetVolumeMessage()
+        vol.volume = level
+
+        var message = MRP_ProtocolMessage()
+        message.type = .setVolumeMessage
+        message.MRP_setVolumeMessage = vol
+
+        let connected = self.tunnel != nil
+        log.info("MRP setVolume: \(level), tunnel: \(connected), hasExt: \(message.hasMRP_setVolumeMessage)")
+        tunnel?.send(message)
+    }
+
     public func seekToPosition(_ position: Double) {
         var options = MRP_CommandOptions()
         options.playbackPosition = position

@@ -102,6 +102,10 @@ struct MRP_ProtocolMessage: SwiftProtobuf.ExtensibleMessage, Sendable {
     case genericMessage = 42
     case setNowPlayingClientMessage = 46
     case setNowPlayingPlayerMessage = 47
+    case getVolumeMessage = 49
+    case getVolumeResultMessage = 50
+    case setVolumeMessage = 51
+    case volumeDidChangeMessage = 52
     case updateContentItemMessage = 56
     case updatePlayerMessage = 58
 
@@ -285,7 +289,8 @@ let MRP_ProtocolMessage_Extensions: SwiftProtobuf.SimpleExtensionMap = [
   MRP_Extensions_playbackQueueMessage,
   MRP_Extensions_cryptoPairingMessage,
   MRP_Extensions_setConnectionStateMessage,
-  MRP_Extensions_updateContentItemMessage
+  MRP_Extensions_updateContentItemMessage,
+  MRP_Extensions_setVolumeMessage
 ]
 
 // Extension Objects - The only reason these might be needed is when manually
