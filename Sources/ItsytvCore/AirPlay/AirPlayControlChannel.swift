@@ -2,7 +2,7 @@ import Foundation
 import Network
 import os.log
 
-private let log = Logger(subsystem: "com.itsytv.app", category: "AirPlayControl")
+private let log = CoreLog(category: "AirPlayControl")
 
 /// HTTP/RTSP client over a raw TCP connection to the AirPlay control port (7000).
 /// Handles pair-verify, HAP encryption, RTSP SETUP/RECORD, and /feedback keep-alive.

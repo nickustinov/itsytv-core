@@ -1,7 +1,7 @@
 import Foundation
 import os.log
 
-private let log = Logger(subsystem: "com.itsytv.app", category: "AirPlayMRPTunnel")
+private let log = CoreLog(category: "AirPlayMRPTunnel")
 
 /// Orchestrates the full AirPlay 2 tunnel setup sequence to transport MRP protobufs.
 /// Provides the same interface as the old MRPConnection: connect, send, onMessage, onReady, onDisconnect.

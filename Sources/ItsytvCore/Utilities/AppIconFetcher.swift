@@ -1,7 +1,7 @@
 import Foundation
 import os.log
 
-private let log = Logger(subsystem: "com.itsytv.app", category: "AppIcons")
+private let log = CoreLog(category: "AppIcons")
 
 /// Fetches tvOS app icon image data from the iTunes Lookup API.
 /// Platform-agnostic – returns raw Data that callers convert to NSImage/UIImage.

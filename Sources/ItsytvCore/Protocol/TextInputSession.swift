@@ -1,7 +1,7 @@
 import Foundation
 import os.log
 
-private let log = Logger(subsystem: "com.itsytv.app", category: "TextInput")
+private let log = CoreLog(category: "TextInput")
 
 /// Encodes and decodes the binary plist payloads used by the RTI text input protocol.
 ///

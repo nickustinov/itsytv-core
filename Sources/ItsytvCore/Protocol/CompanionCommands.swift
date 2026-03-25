@@ -1,7 +1,7 @@
 import Foundation
 import os.log
 
-private let log = Logger(subsystem: "com.itsytv.app", category: "Commands")
+private let log = CoreLog(category: "Commands")
 
 /// HID button values for the Companion protocol `_hidC` command.
 public enum CompanionButton: Int64 {

@@ -3,7 +3,7 @@ import CryptoKit
 import SRP
 import os.log
 
-private let log = Logger(subsystem: "com.itsytv.app", category: "PairSetup")
+private let log = CoreLog(category: "PairSetup")
 
 /// Handles the SRP-based pair-setup flow (M1-M6) for the Companion protocol.
 final class PairSetup {

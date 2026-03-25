@@ -2,7 +2,7 @@ import Foundation
 import CryptoKit
 import os.log
 
-private let log = Logger(subsystem: "com.itsytv.app", category: "Manager")
+private let log = CoreLog(category: "Manager")
 
 /// Orchestrates the full lifecycle of connecting to an Apple TV:
 /// discovery -> pair-setup (if needed) -> pair-verify -> encrypted commands.

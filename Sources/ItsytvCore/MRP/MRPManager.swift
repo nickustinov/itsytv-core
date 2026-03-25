@@ -1,7 +1,7 @@
 import Foundation
 import os.log
 
-private let log = Logger(subsystem: "com.itsytv.app", category: "MRP")
+private let log = CoreLog(category: "MRP")
 
 /// Orchestrates the MRP protocol lifecycle: connect via AirPlay tunnel, subscribe
 /// to now-playing updates, and send media commands.

@@ -2,7 +2,7 @@ import Foundation
 import Security
 import os.log
 
-private let log = Logger(subsystem: "com.itsytv.app", category: "Keychain")
+private let log = CoreLog(category: "Keychain")
 
 /// Stores and retrieves HAP credentials in the system Keychain.
 public enum KeychainStorage {

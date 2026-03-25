@@ -2,7 +2,7 @@ import Foundation
 import Network
 import os.log
 
-private let log = Logger(subsystem: "com.itsytv.app", category: "HAPChannel")
+private let log = CoreLog(category: "HAPChannel")
 
 /// Base class for HAP-encrypted TCP channels (event channel, data stream channel).
 /// Handles TCP connect + HAP session encryption for all data.

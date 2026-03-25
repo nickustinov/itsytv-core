@@ -2,7 +2,7 @@ import Foundation
 import CryptoKit
 import os.log
 
-private let log = Logger(subsystem: "com.itsytv.app", category: "AirPlayPairVerify")
+private let log = CoreLog(category: "AirPlayPairVerify")
 
 /// Handles pair-verify over AirPlay HTTP (POST /pair-verify with TLV8 body).
 /// Same Curve25519 + Ed25519 + HKDF logic as PairVerify but uses raw HTTP

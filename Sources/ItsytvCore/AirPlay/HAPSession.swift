@@ -2,7 +2,7 @@ import Foundation
 import CryptoKit
 import os.log
 
-private let log = Logger(subsystem: "com.itsytv.app", category: "HAPSession")
+private let log = CoreLog(category: "HAPSession")
 
 /// HAP session encryption using 1024-byte block framing with ChaCha20-Poly1305.
 /// Used on AirPlay control, event, and data stream channels.

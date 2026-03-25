@@ -2,7 +2,7 @@ import Foundation
 import Network
 import os.log
 
-private let log = Logger(subsystem: "com.itsytv.app", category: "Connection")
+private let log = CoreLog(category: "Connection")
 
 /// Manages a TCP connection to an Apple TV's Companion Link service.
 /// Handles frame parsing, encryption, and request/response correlation.

@@ -1,7 +1,7 @@
 import Foundation
 import os.log
 
-private let log = Logger(subsystem: "com.itsytv.app", category: "DataStream")
+private let log = CoreLog(category: "DataStream")
 
 /// Data stream channel for MRP protobuf transport over AirPlay 2.
 /// Extends HAPChannel with data stream framing (32-byte header + binary plist payload).

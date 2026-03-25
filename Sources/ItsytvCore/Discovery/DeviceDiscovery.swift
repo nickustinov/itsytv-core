@@ -1,7 +1,7 @@
 import Foundation
 import os.log
 
-private let log = Logger(subsystem: "com.itsytv.app", category: "Discovery")
+private let log = CoreLog(category: "Discovery")
 
 /// Discovers Apple TV devices via Bonjour _companion-link._tcp and resolves their TXT records
 /// to filter by device type (rpFl flags).
