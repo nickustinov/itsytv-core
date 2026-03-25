@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import CryptoKit
 import os.log
 
@@ -178,6 +179,20 @@ public final class AppleTVManager {
         case .hold:
             connection?.holdButton(button)
         }
+    }
+
+    /// Send a touchpad swipe in the given direction, scaled by travel fraction (0–1).
+    public func swipe(_ direction: SwipeDirection, fraction: CGFloat = 0.5) {
+        let center: Int64 = 500
+        // Short swipe ~80 units (single item), full-pad swipe ~400 units
+        let distance = Int64(80 + 320 * min(1, max(0, fraction)))
+        let (endX, endY): (Int64, Int64) = switch direction {
+        case .up:    (center, center - distance)
+        case .down:  (center, center + distance)
+        case .left:  (center - distance, center)
+        case .right: (center + distance, center)
+        }
+        connection?.sendSwipe(startX: center, startY: center, endX: endX, endY: endY, durationMs: 100)
     }
 
     public func launchApp(bundleID: String) {
@@ -413,6 +428,7 @@ public final class AppleTVManager {
                 log.warning("Session start failed, attempting fetchApps anyway")
             }
             self?.connection?.startKeepAlive()
+            self?.connection?.startTouchSession()
             // Start text input listener (like pyatv does on connect)
             self?.connection?.startTextInput { [weak self] response in
                 if let content = response["_c"],

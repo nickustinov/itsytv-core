@@ -13,6 +13,7 @@ final class CompanionConnection {
     private var nextXID: Int64
     private var pendingResponses: [Int64: (OPACK.Value) -> Void] = [:]
     private var keepAliveTimer: DispatchSourceTimer?
+    var touchBaseTimestamp: TimeInterval = 0
 
     var onFrame: ((CompanionFrame) -> Void)?
     var onConnect: (() -> Void)?

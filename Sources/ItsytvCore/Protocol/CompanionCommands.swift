@@ -32,6 +32,10 @@ public enum InputAction {
     case hold
 }
 
+public enum SwipeDirection {
+    case up, down, left, right
+}
+
 /// High-level command helpers for the Companion protocol.
 extension CompanionConnection {
 
@@ -146,6 +150,67 @@ extension CompanionConnection {
             ("_tiV", .int(1)),
             ("_tiD", .data(payload)),
         ]), completion: completion)
+    }
+
+    // MARK: - Touch events (_hidT)
+
+    /// Touch phase values matching the Companion protocol.
+    enum TouchPhase: Int64 {
+        case press = 1
+        case hold = 3
+        case release = 4
+    }
+
+    /// Initialize the virtual touchpad. Must be called once before sending touch events.
+    func startTouchSession(completion: ((Swift.Error?) -> Void)? = nil) {
+        log.info("Starting touch session (1000x1000)")
+        touchBaseTimestamp = ProcessInfo.processInfo.systemUptime
+        sendRequest(eventName: "_touchStart", content: .dictionary([
+            ("_width", .float64(1000.0)),
+            ("_height", .float64(1000.0)),
+            ("_tFl", .int(0)),
+        ]), completion: completion)
+    }
+
+    /// Send a single touch event at the given coordinates (0–1000 range).
+    func sendTouchEvent(x: Int64, y: Int64, phase: TouchPhase) {
+        let ns = Int64((ProcessInfo.processInfo.systemUptime - touchBaseTimestamp) * 1_000_000_000)
+        sendEvent(name: "_hidT", content: .dictionary([
+            ("_ns", .int(ns)),
+            ("_tFg", .int(1)),
+            ("_cx", .float64(Double(x))),
+            ("_tPh", .int(phase.rawValue)),
+            ("_cy", .float64(Double(y))),
+        ]))
+    }
+
+    /// Send a swipe gesture as a sequence of touch events over time.
+    func sendSwipe(
+        startX: Int64, startY: Int64,
+        endX: Int64, endY: Int64,
+        durationMs: Int = 250,
+        completion: ((Swift.Error?) -> Void)? = nil
+    ) {
+        log.warning("swipe: (\(startX),\(startY)) → (\(endX),\(endY)) duration=\(durationMs)ms")
+        sendTouchEvent(x: startX, y: startY, phase: .press)
+
+        let stepMs = 16 // ~60fps, matching pyatv
+        let steps = durationMs / stepMs
+
+        for i in 1...steps {
+            let fraction = Double(i) / Double(steps)
+            let cx = Int64(Double(startX) + fraction * Double(endX - startX))
+            let cy = Int64(Double(startY) + fraction * Double(endY - startY))
+
+            DispatchQueue.global().asyncAfter(deadline: .now() + Double(i * stepMs) / 1000.0) { [weak self] in
+                if i < steps {
+                    self?.sendTouchEvent(x: cx, y: cy, phase: .hold)
+                } else {
+                    self?.sendTouchEvent(x: cx, y: cy, phase: .release)
+                    completion?(nil)
+                }
+            }
+        }
     }
 
     /// Atomically clear and replace the text field (single event, no flash).
