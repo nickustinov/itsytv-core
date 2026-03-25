@@ -13,6 +13,7 @@ private let log = Logger(subsystem: "com.itsytv.app", category: "MRP")
 public final class MRPManager {
     public var nowPlaying: NowPlayingState?
     public var supportedCommands: Set<MediaCommand> = []
+    public var activeAppBundleID: String?
     public var onDisconnect: ((Error?) -> Void)?
     public var onReady: (() -> Void)?
     public var isConnected: Bool { tunnel != nil }
@@ -84,6 +85,7 @@ public final class MRPManager {
         currentContentIdentifier = nil
         nowPlaying = nil
         supportedCommands = []
+        activeAppBundleID = nil
     }
 
     // MARK: - Media commands
@@ -273,6 +275,13 @@ public final class MRPManager {
     private func handleSetState(_ message: MRP_ProtocolMessage) {
         guard message.hasMRP_setStateMessage else { return }
         let state = message.MRP_setStateMessage
+
+        if state.hasPlayerPath && state.playerPath.hasClient && state.playerPath.client.hasBundleIdentifier {
+            let bundleID = state.playerPath.client.bundleIdentifier
+            if !bundleID.isEmpty {
+                DispatchQueue.main.async { self.activeAppBundleID = bundleID }
+            }
+        }
 
         if state.hasSupportedCommands {
             let cmds = state.supportedCommands.supportedCommands
