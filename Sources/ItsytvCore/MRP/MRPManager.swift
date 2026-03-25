@@ -115,6 +115,12 @@ public final class MRPManager {
         tunnel?.send(message)
     }
 
+    /// Re-request the playback queue to get fresh elapsed time (e.g. after returning from background).
+    public func refreshNowPlaying() {
+        guard tunnel != nil else { return }
+        sendPlaybackQueueRequest()
+    }
+
     public func seekToPosition(_ position: Double) {
         var options = MRP_CommandOptions()
         options.playbackPosition = position
