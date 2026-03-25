@@ -19,7 +19,12 @@ final class PairVerify {
             case .verificationFailed: return "Signature verification failed"
             case .decryptionFailed: return "Decryption failed during verify"
             case .missingTLVField(let f): return "Missing TLV field: \(f)"
-            case .serverError(let c): return "Apple TV error: \(c)"
+            case .serverError(let c):
+                switch c {
+                case 2: return "Wrong PIN"
+                case 5: return "Too many attempts – try again later"
+                default: return "Apple TV error: \(c)"
+                }
             case .identityMismatch: return "Server identity mismatch"
             }
         }

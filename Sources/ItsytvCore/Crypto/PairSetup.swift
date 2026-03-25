@@ -21,7 +21,12 @@ final class PairSetup {
             case .srpVerificationFailed: return "PIN verification failed"
             case .decryptionFailed: return "Failed to decrypt server identity"
             case .missingTLVField(let f): return "Missing TLV field: \(f)"
-            case .serverError(let c): return "Apple TV error: \(c)"
+            case .serverError(let c):
+                switch c {
+                case 2: return "Wrong PIN"
+                case 5: return "Too many attempts – try again later"
+                default: return "Apple TV error: \(c)"
+                }
             }
         }
     }
