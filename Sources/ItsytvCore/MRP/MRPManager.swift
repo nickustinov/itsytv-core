@@ -331,7 +331,10 @@ public final class MRPManager {
 
     /// Request the playback queue with artwork, guarded to prevent concurrent requests.
     private func requestArtworkIfNeeded() {
-        guard !artworkRequestPending else { return }
+        guard !artworkRequestPending else {
+            log.info("[ART] request skipped, already pending")
+            return
+        }
         sendPlaybackQueueRequest()
     }
 
@@ -394,16 +397,22 @@ public final class MRPManager {
         if item.hasArtworkData {
             artworkData = item.artworkData
             artworkUnavailable = false
+            log.info("[ART] has artworkData (\(item.artworkData.count) bytes) contentChanged=\(contentChanged)")
         } else if contentChanged {
             artworkData = nil
+            log.info("[ART] content changed, no artwork yet (id=\(itemID ?? "nil"))")
         } else {
             artworkData = self.nowPlaying?.artworkData
             if artworkData == nil {
                 artworkUnavailable = true
+                log.info("[ART] no artwork, marking unavailable (id=\(itemID ?? "nil"))")
+            } else {
+                log.info("[ART] carried forward existing artwork (\(artworkData!.count) bytes)")
             }
         }
 
         let needsArtwork = artworkData == nil && !artworkUnavailable
+        log.info("[ART] needsArtwork=\(needsArtwork) artworkUnavailable=\(self.artworkUnavailable) pending=\(self.artworkRequestPending)")
 
         DispatchQueue.main.async {
             self.nowPlaying = NowPlayingState(
@@ -417,6 +426,7 @@ public final class MRPManager {
                 artworkData: artworkData
             )
             if needsArtwork {
+                log.info("[ART] requesting artwork")
                 self.requestArtworkIfNeeded()
             }
         }
