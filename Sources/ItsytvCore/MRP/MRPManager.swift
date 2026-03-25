@@ -13,6 +13,8 @@ private let log = CoreLog(category: "MRP")
 public final class MRPManager {
     public var nowPlaying: NowPlayingState?
     public var supportedCommands: Set<MediaCommand> = []
+    /// Preferred skip intervals per command, as reported by the active app.
+    public var preferredSkipIntervals: [MediaCommand: Double] = [:]
     public var activeAppBundleID: String?
     public var onDisconnect: ((Error?) -> Void)?
     public var onReady: (() -> Void)?
@@ -55,6 +57,7 @@ public final class MRPManager {
                 self?.tunnel = nil
                 self?.nowPlaying = nil
                 self?.supportedCommands = []
+                self?.preferredSkipIntervals = [:]
                 self?.onDisconnect?(error)
             }
         }
@@ -85,6 +88,7 @@ public final class MRPManager {
         currentContentIdentifier = nil
         nowPlaying = nil
         supportedCommands = []
+        preferredSkipIntervals = [:]
         activeAppBundleID = nil
     }
 
@@ -306,11 +310,24 @@ public final class MRPManager {
         }
 
         if state.hasSupportedCommands {
-            let cmds = state.supportedCommands.supportedCommands
-                .filter { $0.hasEnabled && $0.enabled }
-                .compactMap { $0.hasCommand ? MediaCommand($0.command) : nil }
+            let infos = state.supportedCommands.supportedCommands
+                .filter { $0.hasEnabled && $0.enabled && $0.hasCommand }
+            let cmds = infos.compactMap { MediaCommand($0.command) }
+            var intervals: [MediaCommand: Double] = [:]
+            for info in infos {
+                if let cmd = MediaCommand(info.command) {
+                    if !info.preferredIntervals.isEmpty {
+                        log.info("MRP cmd \(String(describing: cmd)): preferredIntervals=\(info.preferredIntervals)")
+                        intervals[cmd] = info.preferredIntervals.first
+                    }
+                }
+            }
+            if !intervals.isEmpty {
+                log.info("MRP skip intervals: \(intervals.map { "\($0.key): \($0.value)s" }.joined(separator: ", "))")
+            }
             DispatchQueue.main.async {
                 self.supportedCommands = Set(cmds)
+                self.preferredSkipIntervals = intervals
                 if cmds.isEmpty {
                     self.nowPlaying = nil
                 }
