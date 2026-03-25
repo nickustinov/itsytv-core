@@ -20,12 +20,14 @@ final class AirPlayMRPTunnel {
     private var dataChannel: DataStreamChannel?
     private var host: String = ""
     private var heartbeatTimer: DispatchSourceTimer?
+    private var disconnected = false
 
     // MARK: - Connect
 
     func connect(host: String, port: UInt16, credentials: HAPCredentials) {
         log.info("AirPlayMRPTunnel starting: \(host):\(port)")
         self.host = host
+        self.disconnected = false
 
         let control = AirPlayControlChannel()
         self.controlChannel = control
@@ -48,10 +50,13 @@ final class AirPlayMRPTunnel {
 
     func disconnect() {
         stopHeartbeat()
+        dataChannel?.onDisconnect = nil
         dataChannel?.disconnect()
         dataChannel = nil
+        eventChannel?.onDisconnect = nil
         eventChannel?.disconnect()
         eventChannel = nil
+        controlChannel?.onDisconnect = nil
         controlChannel?.disconnect()
         controlChannel = nil
     }
@@ -314,6 +319,8 @@ final class AirPlayMRPTunnel {
     // MARK: - Disconnect handling
 
     private func handleDisconnect(_ error: Swift.Error?) {
+        guard !disconnected else { return }
+        disconnected = true
         disconnect()
         onDisconnect?(error)
     }
