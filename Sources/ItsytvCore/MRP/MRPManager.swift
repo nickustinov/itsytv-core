@@ -101,6 +101,22 @@ public final class MRPManager {
         tunnel?.send(message)
     }
 
+    /// Send a skip command with a time interval in seconds.
+    public func sendSkip(_ command: MediaCommand, interval: Float = 15) {
+        var options = MRP_CommandOptions()
+        options.skipInterval = interval
+
+        var sendCmd = MRP_SendCommandMessage()
+        sendCmd.command = command.mrpCommand
+        sendCmd.options = options
+
+        var message = MRP_ProtocolMessage()
+        message.type = .sendCommandMessage
+        message.MRP_sendCommandMessage = sendCmd
+
+        tunnel?.send(message)
+    }
+
     /// Set volume directly (0.0 = muted, 1.0 = max).
     public func setVolume(_ level: Float) {
         var vol = MRP_SetVolumeMessage()
