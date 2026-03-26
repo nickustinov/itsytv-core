@@ -526,13 +526,28 @@ public final class AppleTVManager {
 
     // MARK: - App ordering
 
+    public var orderedGridItems: [AppGridItem] {
+        let saved = connectedDeviceID.flatMap { AppOrderStorage.load(deviceID: $0) }
+        return AppOrderStorage.applyOrder(
+            savedItems: saved,
+            apps: installedApps,
+            builtInBundleIDs: BuiltInApps.bundleIDs
+        )
+    }
+
+    /// Legacy flat ordering (for callers not yet migrated).
     public var orderedApps: [(bundleID: String, name: String)] {
-        let savedOrder = connectedDeviceID.flatMap { AppOrderStorage.load(deviceID: $0) }
+        let savedOrder = connectedDeviceID.flatMap { AppOrderStorage.loadFlat(deviceID: $0) }
         return AppOrderStorage.applyOrder(
             savedOrder: savedOrder,
             apps: installedApps,
             builtInBundleIDs: BuiltInApps.bundleIDs
         )
+    }
+
+    public func saveGridItems(_ items: [AppGridItem]) {
+        guard let deviceID = connectedDeviceID else { return }
+        AppOrderStorage.save(deviceID: deviceID, items: AppOrderStorage.toDTO(items))
     }
 
     public func saveAppOrder(_ bundleIDs: [String]) {
