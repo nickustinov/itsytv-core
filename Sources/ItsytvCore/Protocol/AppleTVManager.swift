@@ -5,6 +5,76 @@ import os.log
 
 private let log = CoreLog(category: "Manager")
 
+enum TouchMotionProfile {
+    static let touchpadSize: Double = 1000
+    static let center: Double = touchpadSize / 2
+    static let defaultReferenceSize = CGSize(width: 200, height: 200)
+    static let sampleInterval: TimeInterval = 1.0 / 60.0
+    static let inertiaProjectionTime: CGFloat = 0.075
+    static let inertiaMaxDistanceRatio: CGFloat = 0.9
+    static let inertiaMinimumVelocity: CGFloat = 120
+    static let inertiaSteps = 8
+
+    static func sanitizeReferenceSize(_ referenceSize: CGSize) -> CGSize {
+        CGSize(
+            width: referenceSize.width > 0 ? referenceSize.width : defaultReferenceSize.width,
+            height: referenceSize.height > 0 ? referenceSize.height : defaultReferenceSize.height
+        )
+    }
+
+    static func virtualDelta(for pointDelta: CGPoint, referenceSize: CGSize) -> CGPoint {
+        let reference = sanitizeReferenceSize(referenceSize)
+        return CGPoint(
+            x: pointDelta.x * CGFloat(touchpadSize) / reference.width,
+            y: pointDelta.y * CGFloat(touchpadSize) / reference.height
+        )
+    }
+
+    static func inertiaVirtualDeltas(for velocity: CGPoint, referenceSize: CGSize) -> [CGPoint] {
+        guard hypot(velocity.x, velocity.y) >= inertiaMinimumVelocity else { return [] }
+
+        let reference = sanitizeReferenceSize(referenceSize)
+        let projectedPointDelta = CGPoint(
+            x: clamp(
+                velocity.x * inertiaProjectionTime,
+                min: -reference.width * inertiaMaxDistanceRatio,
+                max: reference.width * inertiaMaxDistanceRatio
+            ),
+            y: clamp(
+                velocity.y * inertiaProjectionTime,
+                min: -reference.height * inertiaMaxDistanceRatio,
+                max: reference.height * inertiaMaxDistanceRatio
+            )
+        )
+
+        var previous = CGPoint.zero
+        var deltas: [CGPoint] = []
+        deltas.reserveCapacity(inertiaSteps)
+
+        for step in 1...inertiaSteps {
+            let progress = CGFloat(step) / CGFloat(inertiaSteps)
+            let eased = 1 - (1 - progress) * (1 - progress)
+            let current = CGPoint(
+                x: projectedPointDelta.x * eased,
+                y: projectedPointDelta.y * eased
+            )
+            deltas.append(
+                virtualDelta(
+                    for: CGPoint(x: current.x - previous.x, y: current.y - previous.y),
+                    referenceSize: reference
+                )
+            )
+            previous = current
+        }
+
+        return deltas
+    }
+
+    private static func clamp(_ value: CGFloat, min minValue: CGFloat, max maxValue: CGFloat) -> CGFloat {
+        Swift.max(minValue, Swift.min(maxValue, value))
+    }
+}
+
 /// Orchestrates the full lifecycle of connecting to an Apple TV:
 /// discovery -> pair-setup (if needed) -> pair-verify -> encrypted commands.
 @Observable
@@ -192,7 +262,94 @@ public final class AppleTVManager {
         case .left:  (center - distance, center)
         case .right: (center + distance, center)
         }
-        connection?.sendSwipe(startX: center, startY: center, endX: endX, endY: endY, durationMs: 100)
+        connection?.sendSwipe(startX: center, startY: center, endX: endX, endY: endY, durationMs: 150)
+    }
+
+    // MARK: - Real-time touch streaming
+
+    private var touchLastNormalizedDx: CGFloat = 0
+    private var touchLastNormalizedDy: CGFloat = 0
+    private var touchLastTranslation: CGPoint = .zero
+    private var touchReferenceSize: CGSize = TouchMotionProfile.defaultReferenceSize
+    private var touchVirtualX: Double = TouchMotionProfile.center
+    private var touchVirtualY: Double = TouchMotionProfile.center
+    private var touchLastSendTime: TimeInterval = 0
+    private var touchSequenceID: UInt64 = 0
+    private var touchIsActive = false
+
+    /// Begin a touch at the center of the virtual touchpad.
+    public func touchBegan() {
+        touchBegan(referenceSize: TouchMotionProfile.defaultReferenceSize)
+    }
+
+    /// Begin a touch using the provided reference touch surface size in points.
+    public func touchBegan(referenceSize: CGSize) {
+        touchSequenceID &+= 1
+
+        if touchIsActive {
+            finishTouch()
+        }
+
+        touchReferenceSize = TouchMotionProfile.sanitizeReferenceSize(referenceSize)
+        touchLastNormalizedDx = 0
+        touchLastNormalizedDy = 0
+        touchLastTranslation = .zero
+        touchVirtualX = TouchMotionProfile.center
+        touchVirtualY = TouchMotionProfile.center
+        touchLastSendTime = 0
+        touchIsActive = true
+        connection?.sendTouchEvent(
+            x: Int64(TouchMotionProfile.center),
+            y: Int64(TouchMotionProfile.center),
+            phase: .press
+        )
+    }
+
+    /// Stream a touch move. `translation` is the cumulative drag offset in points.
+    public func touchMoved(translation: CGPoint) {
+        guard touchIsActive else { return }
+
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - touchLastSendTime >= TouchMotionProfile.sampleInterval else { return }
+        touchLastSendTime = now
+
+        applyTouchTranslation(translation)
+    }
+
+    /// Compatibility overload for clients that still send cumulative normalized offsets.
+    public func touchMoved(dx: CGFloat, dy: CGFloat) {
+        guard touchIsActive else { return }
+
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - touchLastSendTime >= TouchMotionProfile.sampleInterval else { return }
+        touchLastSendTime = now
+
+        applyNormalizedTouchTranslation(dx: dx, dy: dy)
+    }
+
+    /// End the touch at the current position, preserving the last finger movement and velocity.
+    public func touchEnded(translation: CGPoint, velocity: CGPoint) {
+        guard touchIsActive else { return }
+
+        applyTouchTranslation(translation)
+
+        let inertiaDeltas = TouchMotionProfile.inertiaVirtualDeltas(
+            for: velocity,
+            referenceSize: touchReferenceSize
+        )
+        guard !inertiaDeltas.isEmpty else {
+            finishTouch()
+            return
+        }
+
+        let sequenceID = touchSequenceID
+        continueTouchInertia(with: inertiaDeltas, index: 0, sequenceID: sequenceID)
+    }
+
+    public func touchEnded(dx: CGFloat, dy: CGFloat) {
+        guard touchIsActive else { return }
+        applyNormalizedTouchTranslation(dx: dx, dy: dy)
+        finishTouch()
     }
 
     public func launchApp(bundleID: String) {
@@ -244,6 +401,117 @@ public final class AppleTVManager {
     /// Reset local text tracking (call when closing keyboard).
     public func resetTextInputState() {
         sentText = ""
+    }
+
+    private func applyTouchTranslation(_ translation: CGPoint) {
+        let pointDelta = CGPoint(
+            x: translation.x - touchLastTranslation.x,
+            y: translation.y - touchLastTranslation.y
+        )
+        guard pointDelta != .zero else { return }
+
+        touchLastTranslation = translation
+        applyVirtualDelta(TouchMotionProfile.virtualDelta(for: pointDelta, referenceSize: touchReferenceSize))
+    }
+
+    private func applyNormalizedTouchTranslation(dx: CGFloat, dy: CGFloat) {
+        let deltaDx = Double(dx - touchLastNormalizedDx) * TouchMotionProfile.center
+        let deltaDy = Double(dy - touchLastNormalizedDy) * TouchMotionProfile.center
+        guard deltaDx != 0 || deltaDy != 0 else { return }
+
+        touchLastNormalizedDx = dx
+        touchLastNormalizedDy = dy
+        applyVirtualDelta(CGPoint(x: CGFloat(deltaDx), y: CGFloat(deltaDy)))
+    }
+
+    private func applyVirtualDelta(_ virtualDelta: CGPoint) {
+        guard touchIsActive else { return }
+
+        var remainingX = Double(virtualDelta.x)
+        var remainingY = Double(virtualDelta.y)
+
+        while abs(remainingX) > .ulpOfOne || abs(remainingY) > .ulpOfOne {
+            let targetX = touchVirtualX + remainingX
+            let targetY = touchVirtualY + remainingY
+
+            if isWithinTouchBounds(x: targetX, y: targetY) {
+                touchVirtualX = targetX
+                touchVirtualY = targetY
+                connection?.sendTouchEvent(
+                    x: Int64(touchVirtualX.rounded()),
+                    y: Int64(touchVirtualY.rounded()),
+                    phase: .hold
+                )
+                return
+            }
+
+            let fraction = min(
+                fractionToBoundary(current: touchVirtualX, delta: remainingX),
+                fractionToBoundary(current: touchVirtualY, delta: remainingY)
+            )
+            let clampedFraction = Swift.max(0, Swift.min(1, fraction))
+
+            touchVirtualX = clampTouchCoordinate(touchVirtualX + remainingX * clampedFraction)
+            touchVirtualY = clampTouchCoordinate(touchVirtualY + remainingY * clampedFraction)
+            connection?.sendTouchEvent(
+                x: Int64(touchVirtualX.rounded()),
+                y: Int64(touchVirtualY.rounded()),
+                phase: .release
+            )
+
+            remainingX *= 1 - clampedFraction
+            remainingY *= 1 - clampedFraction
+            touchVirtualX = TouchMotionProfile.center
+            touchVirtualY = TouchMotionProfile.center
+            connection?.sendTouchEvent(
+                x: Int64(TouchMotionProfile.center),
+                y: Int64(TouchMotionProfile.center),
+                phase: .press
+            )
+        }
+    }
+
+    private func continueTouchInertia(with deltas: [CGPoint], index: Int, sequenceID: UInt64) {
+        guard index < deltas.count else {
+            finishTouch()
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + TouchMotionProfile.sampleInterval) { [weak self] in
+            guard let self else { return }
+            guard self.touchIsActive, self.touchSequenceID == sequenceID else { return }
+
+            self.applyVirtualDelta(deltas[index])
+            self.continueTouchInertia(with: deltas, index: index + 1, sequenceID: sequenceID)
+        }
+    }
+
+    private func finishTouch() {
+        guard touchIsActive else { return }
+
+        connection?.sendTouchEvent(
+            x: Int64(touchVirtualX.rounded()),
+            y: Int64(touchVirtualY.rounded()),
+            phase: .release
+        )
+        touchIsActive = false
+    }
+
+    private func isWithinTouchBounds(x: Double, y: Double) -> Bool {
+        (0...TouchMotionProfile.touchpadSize).contains(x) &&
+        (0...TouchMotionProfile.touchpadSize).contains(y)
+    }
+
+    private func fractionToBoundary(current: Double, delta: Double) -> Double {
+        guard delta != 0 else { return .infinity }
+        if delta > 0 {
+            return (TouchMotionProfile.touchpadSize - current) / delta
+        }
+        return -current / delta
+    }
+
+    private func clampTouchCoordinate(_ value: Double) -> Double {
+        Swift.max(0, Swift.min(TouchMotionProfile.touchpadSize, value))
     }
 
     // MARK: - Frame handling

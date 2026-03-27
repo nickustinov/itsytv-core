@@ -465,7 +465,7 @@ public final class MRPManager {
         DispatchQueue.main.async {
             self.nowPlaying = NowPlayingState(
                 title: meta.hasTitle ? meta.title : nil,
-                artist: meta.hasTrackArtistName ? meta.trackArtistName : nil,
+                artist: meta.hasTrackArtistName ? meta.trackArtistName : (meta.hasSubtitle ? meta.subtitle : nil),
                 album: meta.hasAlbumName ? meta.albumName : nil,
                 duration: meta.hasDuration ? meta.duration : nil,
                 elapsedTime: meta.hasElapsedTime ? meta.elapsedTime : nil,
