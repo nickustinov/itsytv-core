@@ -8,7 +8,7 @@ public enum ConnectionStatus: Equatable {
     case error(String)
 }
 
-public struct AppleTVDevice: Identifiable, Hashable {
+public struct AppleTVDevice: Identifiable, Hashable, Codable {
     public let id: String
     public let name: String
     public let host: String

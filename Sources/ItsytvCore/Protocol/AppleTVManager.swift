@@ -79,6 +79,12 @@ enum TouchMotionProfile {
 /// discovery -> pair-setup (if needed) -> pair-verify -> encrypted commands.
 @Observable
 public final class AppleTVManager {
+    /// Use an app-group `UserDefaults` instance when the app and widget extension
+    /// need to share the last connected device across processes.
+    public static func configurePersistence(userDefaults: UserDefaults) {
+        LastConnectedDeviceStorage.userDefaults = userDefaults
+    }
+
     public var connectionStatus: ConnectionStatus = .disconnected
     public var discoveredDevices: [AppleTVDevice] = []
     public var connectedDeviceName: String?
@@ -104,6 +110,7 @@ public final class AppleTVManager {
     /// Text input session state — kept alive while connected.
     private var textInputSessionUUID: Data?
     private var sentText = ""
+    private var pendingCompanionCommands: [() -> Void] = []
     private var mrpRetryCount = 0
     private static let maxMRPRetries = 3
     private var isReconnecting = false
@@ -135,9 +142,22 @@ public final class AppleTVManager {
     // MARK: - Connection
 
     public func connect(to device: AppleTVDevice) {
-        disconnect()
+        connect(to: device, preservingPendingCommands: false)
+    }
+
+    @discardableResult
+    public func connectToLastConnectedDevice() -> Bool {
+        guard let device = LastConnectedDeviceStorage.load() else { return false }
+        connect(to: device, preservingPendingCommands: false)
+        return true
+    }
+
+    private func connect(to device: AppleTVDevice, preservingPendingCommands: Bool) {
+        disconnect(clearPendingCommands: !preservingPendingCommands)
         connectionStatus = .connecting
         self.connectedDevice = device
+        self.connectedDeviceName = device.name
+        LastConnectedDeviceStorage.save(device)
 
         let conn = CompanionConnection()
         self.connection = conn
@@ -200,6 +220,10 @@ public final class AppleTVManager {
     }
 
     public func disconnect() {
+        disconnect(clearPendingCommands: true)
+    }
+
+    private func disconnect(clearPendingCommands: Bool) {
         connection?.stopTextInput()
         mrpManager.disconnect()
         connection?.disconnect()
@@ -214,6 +238,9 @@ public final class AppleTVManager {
         companionRetryCount = 0
         isReconnecting = false
         installedApps = []
+        if clearPendingCommands {
+            pendingCompanionCommands.removeAll()
+        }
     }
 
     // MARK: - Pairing
@@ -240,29 +267,35 @@ public final class AppleTVManager {
     // MARK: - Commands
 
     public func pressButton(_ button: CompanionButton, action: InputAction = .click) {
-        switch action {
-        case .click:
-            let hold: TimeInterval = button == .siri ? 1.0 : 0.05
-            connection?.pressButton(button, holdDuration: hold)
-        case .doubleClick:
-            connection?.doubleTapButton(button)
-        case .hold:
-            connection?.holdButton(button)
+        performOrQueueCompanionCommand { [weak self] in
+            guard let self else { return }
+            switch action {
+            case .click:
+                let hold: TimeInterval = button == .siri ? 1.0 : 0.05
+                self.connection?.pressButton(button, holdDuration: hold)
+            case .doubleClick:
+                self.connection?.doubleTapButton(button)
+            case .hold:
+                self.connection?.holdButton(button)
+            }
         }
     }
 
     /// Send a touchpad swipe in the given direction, scaled by travel fraction (0–1).
     public func swipe(_ direction: SwipeDirection, fraction: CGFloat = 0.5) {
-        let center: Int64 = 500
-        // Short swipe ~80 units (single item), full-pad swipe ~400 units
-        let distance = Int64(80 + 320 * min(1, max(0, fraction)))
-        let (endX, endY): (Int64, Int64) = switch direction {
-        case .up:    (center, center - distance)
-        case .down:  (center, center + distance)
-        case .left:  (center - distance, center)
-        case .right: (center + distance, center)
+        performOrQueueCompanionCommand { [weak self] in
+            guard let self else { return }
+            let center: Int64 = 500
+            // Short swipe ~80 units (single item), full-pad swipe ~400 units
+            let distance = Int64(80 + 320 * min(1, max(0, fraction)))
+            let (endX, endY): (Int64, Int64) = switch direction {
+            case .up:    (center, center - distance)
+            case .down:  (center, center + distance)
+            case .left:  (center - distance, center)
+            case .right: (center + distance, center)
+            }
+            self.connection?.sendSwipe(startX: center, startY: center, endX: endX, endY: endY, durationMs: 150)
         }
-        connection?.sendSwipe(startX: center, startY: center, endX: endX, endY: endY, durationMs: 150)
     }
 
     // MARK: - Real-time touch streaming
@@ -353,7 +386,9 @@ public final class AppleTVManager {
     }
 
     public func launchApp(bundleID: String) {
-        connection?.launchApp(bundleID: bundleID)
+        performOrQueueCompanionCommand { [weak self] in
+            self?.connection?.launchApp(bundleID: bundleID)
+        }
     }
 
     /// Update the Apple TV text field to match `newText`.
@@ -707,6 +742,7 @@ public final class AppleTVManager {
             }
             DispatchQueue.main.async {
                 self?.connectionStatus = .connected
+                self?.flushPendingCompanionCommands()
                 self?.fetchApps()
             }
         }
@@ -747,6 +783,46 @@ public final class AppleTVManager {
             self?.startPairVerify(credentials: credentials)
         }
         conn.connectToService(name: device.name)
+    }
+
+    private func performOrQueueCompanionCommand(_ command: @escaping () -> Void) {
+        if connectionStatus == .connected, connection != nil {
+            command()
+            return
+        }
+
+        pendingCompanionCommands.append(command)
+        guard ensureCompanionConnectionForPendingCommands() else {
+            log.warning("Dropping queued command: no saved device available")
+            pendingCompanionCommands.removeAll()
+            return
+        }
+    }
+
+    private func ensureCompanionConnectionForPendingCommands() -> Bool {
+        if connectionStatus == .connected, connection != nil {
+            return true
+        }
+        if connectionStatus == .connecting || connectionStatus == .pairing {
+            return true
+        }
+
+        guard let device = connectedDevice ?? LastConnectedDeviceStorage.load() else {
+            return false
+        }
+
+        connect(to: device, preservingPendingCommands: true)
+        return true
+    }
+
+    private func flushPendingCompanionCommands() {
+        guard !pendingCompanionCommands.isEmpty else { return }
+
+        let commands = pendingCompanionCommands
+        pendingCompanionCommands.removeAll()
+        for command in commands {
+            command()
+        }
     }
 
     private func startMRPViaTunnel() {
