@@ -347,6 +347,8 @@ public final class MRPManager {
                 if pbState == .stopped {
                     self.nowPlaying = nil
                 } else if var current = self.nowPlaying {
+                    // Snapshot current position before changing rate
+                    current.elapsedTime = current.currentPosition
                     current.playbackRate = (pbState == .playing) ? 1 : 0
                     current.timestamp = Date()
                     self.nowPlaying = current
@@ -438,7 +440,15 @@ public final class MRPManager {
         }
 
         let playbackRate = meta.hasPlaybackRate ? meta.playbackRate : (self.nowPlaying?.playbackRate ?? 0)
-        let timestamp = Date()
+
+        // elapsedTimeTimestamp is in Cocoa epoch (Jan 1, 2001)
+        let timestamp: Date
+        if meta.hasElapsedTimeTimestamp, meta.elapsedTimeTimestamp > 0 {
+            let cocoaReferenceDate = Date(timeIntervalSince1970: 978_307_200) // Jan 1, 2001
+            timestamp = cocoaReferenceDate.addingTimeInterval(meta.elapsedTimeTimestamp)
+        } else {
+            timestamp = Date()
+        }
 
         // Only carry forward artwork if the content item hasn't changed
         let artworkData: Data?
