@@ -34,6 +34,8 @@ public struct NowPlayingState {
 
     public var currentPosition: TimeInterval {
         guard let elapsed = elapsedTime else { return 0 }
-        return elapsed + Date().timeIntervalSince(timestamp) * Double(playbackRate)
+        let position = elapsed + Date().timeIntervalSince(timestamp) * Double(playbackRate)
+        guard position.isFinite else { return 0 }
+        return max(0, position)
     }
 }
