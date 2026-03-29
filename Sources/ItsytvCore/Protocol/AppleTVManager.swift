@@ -134,6 +134,11 @@ public final class AppleTVManager {
         discovery.refresh()
     }
 
+    /// Returns all resolved Bonjour services (including filtered ones) for debugging.
+    public func debugDiscoveryDump() -> [[String: Any]] {
+        discovery.allResolvedServices()
+    }
+
     public func stopScanning() {
         isScanning = false
         discovery.stop()
