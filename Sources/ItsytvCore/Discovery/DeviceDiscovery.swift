@@ -192,6 +192,6 @@ extension DeviceDiscovery: NetServiceDelegate {
     }
 
     func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {
-        log.verbose("Failed to resolve \(sender.name): \(errorDict)")
+        log.warning("Failed to resolve \(sender.name): \(errorDict)")
     }
 }
