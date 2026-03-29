@@ -158,7 +158,6 @@ public final class AppleTVManager {
     }
 
     private func connect(to device: AppleTVDevice, preservingPendingCommands: Bool) {
-        discovery.pause()
         disconnect(clearPendingCommands: !preservingPendingCommands)
         connectionStatus = .connecting
         self.connectedDevice = device
@@ -748,6 +747,7 @@ public final class AppleTVManager {
             }
             DispatchQueue.main.async {
                 self?.connectionStatus = .connected
+                self?.discovery.pause()
                 self?.flushPendingCompanionCommands()
                 self?.fetchApps()
             }
