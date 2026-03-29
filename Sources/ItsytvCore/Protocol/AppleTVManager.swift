@@ -158,6 +158,7 @@ public final class AppleTVManager {
     }
 
     private func connect(to device: AppleTVDevice, preservingPendingCommands: Bool) {
+        stopScanning()
         disconnect(clearPendingCommands: !preservingPendingCommands)
         connectionStatus = .connecting
         self.connectedDevice = device

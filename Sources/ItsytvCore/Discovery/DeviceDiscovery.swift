@@ -20,7 +20,6 @@ final class DeviceDiscovery: NSObject {
     }
 
     func refresh() {
-        resolveAllServices()
         restartBrowsing()
         knockLastDevice()
     }
@@ -68,23 +67,14 @@ final class DeviceDiscovery: NSObject {
         startBrowsing()
     }
 
-    /// Re-resolve all known services to pick up address/TXT changes.
-    private func resolveAllServices() {
-        for service in services.values {
-            service.resolve(withTimeout: 5.0)
-        }
-    }
-
     // MARK: - Retry loop
 
-    /// Periodically re-browse and re-resolve to catch devices that were
+    /// Periodically restart the browser to catch devices that were
     /// sleeping or missed due to dropped mDNS packets.
     private func startRetryLoop() {
         retryTimer?.invalidate()
-        retryTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
+        retryTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             guard let self else { return }
-            self.resolveAllServices()
-            // Restart browse every cycle to catch new advertisements
             self.restartBrowsing()
         }
     }
@@ -202,6 +192,6 @@ extension DeviceDiscovery: NetServiceDelegate {
     }
 
     func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {
-        log.warning("Failed to resolve \(sender.name): \(errorDict)")
+        log.verbose("Failed to resolve \(sender.name): \(errorDict)")
     }
 }
