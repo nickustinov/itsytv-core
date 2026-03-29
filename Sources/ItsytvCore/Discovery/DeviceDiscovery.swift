@@ -24,11 +24,16 @@ final class DeviceDiscovery: NSObject {
         knockLastDevice()
     }
 
-    func stop() {
+    /// Stop browsing and timer but keep discovered devices.
+    func pause() {
         retryTimer?.invalidate()
         retryTimer = nil
         browser?.stop()
         browser = nil
+    }
+
+    func stop() {
+        pause()
         services.removeAll()
         devices.removeAll()
     }
