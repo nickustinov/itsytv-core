@@ -288,6 +288,7 @@ let MRP_ProtocolMessage_Extensions: SwiftProtobuf.SimpleExtensionMap = [
   MRP_Extensions_playbackQueueRequestMessage,
   MRP_Extensions_playbackQueueMessage,
   MRP_Extensions_cryptoPairingMessage,
+  MRP_Extensions_sendHIDEventMessage,
   MRP_Extensions_setConnectionStateMessage,
   MRP_Extensions_updateContentItemMessage,
   MRP_Extensions_setVolumeMessage

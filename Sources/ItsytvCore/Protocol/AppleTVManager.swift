@@ -90,6 +90,7 @@ public final class AppleTVManager {
     public var connectedDeviceName: String?
     public var isScanning = false
     public var installedApps: [(bundleID: String, name: String)] = []
+    public var keyboardFocused = false
     public var mrpManager = MRPManager()
     public var keyboardBlinkButton: CompanionButton = .select
     public var keyboardBlinkCounter = 0
@@ -238,6 +239,7 @@ public final class AppleTVManager {
         connectedDevice = nil
         currentCredentials = nil
         textInputSessionUUID = nil
+        keyboardFocused = false
         sentText = ""
         mrpRetryCount = 0
         companionRetryCount = 0
@@ -270,6 +272,12 @@ public final class AppleTVManager {
     }
 
     // MARK: - Commands
+
+    /// Toggle mute on/off via MRP HID event.
+    /// Works with soundbars/receivers connected via HDMI-CEC.
+    public func toggleMute() {
+        mrpManager.toggleMute()
+    }
 
     public func pressButton(_ button: CompanionButton, action: InputAction = .click) {
         performOrQueueCompanionCommand { [weak self] in
@@ -862,6 +870,11 @@ public final class AppleTVManager {
         }
         mrpManager.onReady = { [weak self] in
             self?.mrpRetryCount = 0
+        }
+        mrpManager.onKeyboardFocusChange = { [weak self] focused in
+            DispatchQueue.main.async {
+                self?.keyboardFocused = focused
+            }
         }
         mrpManager.connect(host: device.host, port: airplayPort, credentials: creds)
     }

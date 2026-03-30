@@ -18,6 +18,7 @@ public final class MRPManager {
     public var activeAppBundleID: String?
     public var onDisconnect: ((Error?) -> Void)?
     public var onReady: (() -> Void)?
+    public var onKeyboardFocusChange: ((Bool) -> Void)?
     public var isConnected: Bool { tunnel != nil }
 
     private var tunnel: AirPlayMRPTunnel?
@@ -119,6 +120,72 @@ public final class MRPManager {
         message.MRP_sendCommandMessage = sendCmd
 
         tunnel?.send(message)
+    }
+
+    /// Send a raw HID event (usage page + usage code + down/up).
+    ///
+    /// This is used for hardware-level key events like mute that are not
+    /// part of the media command set. The binary format matches what pyatv
+    /// sends via `SEND_HID_EVENT_MESSAGE`.
+    public func sendHidEvent(usagePage: UInt16, usage: UInt16, down: Bool) {
+        guard tunnel != nil else {
+            log.error("sendHidEvent: no MRP tunnel")
+            return
+        }
+
+        // Hardcoded mach AbsoluteTime (device does not care about the value)
+        let absTime = Data([0x43, 0x89, 0x22, 0xcf, 0x08, 0x02, 0x00, 0x00])
+
+        // Binary layout must exactly match pyatv's send_hid_event format (35 bytes)
+        let padding = Data([
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x02, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00,
+            0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00
+        ])
+
+        var payload = Data()
+        payload.append(UInt8(usagePage >> 8))
+        payload.append(UInt8(usagePage & 0xFF))
+        payload.append(UInt8(usage >> 8))
+        payload.append(UInt8(usage & 0xFF))
+        payload.append(UInt8(0x00))
+        payload.append(UInt8(down ? 0x01 : 0x00))
+
+        let trailer = Data([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00])
+
+        let eventData = absTime + padding + payload + trailer
+        log.error("sendHidEvent: page=\(usagePage) usage=\(usage) down=\(down) bytes=\(eventData.count) hex=\(eventData.map { String(format: "%02x", $0) }.joined())")
+
+        var event = MRP_SendHIDEventMessage()
+        event.hidEventData = eventData
+
+        var message = MRP_ProtocolMessage()
+        message.type = .sendHidEventMessage
+        message.uniqueIdentifier = UUID().uuidString.uppercased()
+        message.MRP_sendHIDEventMessage = event
+
+        tunnel?.send(message)
+    }
+
+    /// Toggle mute on/off via HDMI-CEC.
+    ///
+    /// Sends USB HID Consumer usage page (0x0C) mute key (0xE2),
+    /// followed by a GENERIC_MESSAGE flush to reset protocol state.
+    /// Without the flush, subsequent button presses can break.
+    public func toggleMute() {
+        log.error("toggleMute called, tunnel connected: \(tunnel != nil)")
+        sendHidEvent(usagePage: 0x000C, usage: 0x00E2, down: true)
+        sendHidEvent(usagePage: 0x000C, usage: 0x00E2, down: false)
+
+        // Flush: send a GENERIC_MESSAGE and wait for response.
+        // This prevents protocol state corruption after HID events.
+        var flush = MRP_ProtocolMessage()
+        flush.type = .genericMessage
+        sendAndReceive(&flush) { _ in
+            log.error("toggleMute flush complete")
+        }
     }
 
     /// Set volume directly (0.0 = muted, 1.0 = max).
