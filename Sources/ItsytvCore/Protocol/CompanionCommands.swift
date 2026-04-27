@@ -107,6 +107,46 @@ extension CompanionConnection {
         )
     }
 
+    /// Send `_systemInfo` to the Apple TV. The reply carries `_osV` (and a
+    /// large grab-bag of device metadata we don't currently need) — we only
+    /// use the version field to drive empty-state copy on tvOS 26.5 beta,
+    /// which breaks `FetchLaunchableApplicationsEvent`.
+    ///
+    /// Field formats mirror pyatv's `_systemInfo` request so the device
+    /// accepts our identity payload.
+    func sendSystemInfo(
+        clientID: String,
+        clientPublicKey: Data,
+        deviceModel: String,
+        responseHandler: @escaping (OPACK.Value) -> Void
+    ) {
+        let stripped = clientID.replacingOccurrences(of: "-", with: "").lowercased()
+        let rpID = stripped.count >= 12
+            ? String(stripped.prefix(12))
+            : stripped + String(repeating: "0", count: 12 - stripped.count)
+        let macBytes = clientPublicKey.prefix(6)
+        let macSrc: [UInt8] = macBytes.count == 6
+            ? Array(macBytes)
+            : Array(macBytes) + Array(repeating: UInt8(0), count: 6 - macBytes.count)
+        let pubID = macSrc.map { String(format: "%02X", $0) }.joined(separator: ":")
+        sendRequest(
+            eventName: "_systemInfo",
+            content: .dictionary([
+                ("_bf", .int(0)),
+                ("_cf", .int(512)),
+                ("_clFl", .int(128)),
+                ("_i", .string(rpID)),
+                ("_idsID", .string(clientID)),
+                ("_pubID", .string(pubID)),
+                ("_sf", .int(256)),
+                ("_sv", .string("170.18")),
+                ("model", .string(deviceModel)),
+                ("name", .string("Itsytv")),
+            ]),
+            responseHandler: responseHandler
+        )
+    }
+
     /// Fetch the list of launchable applications.
     func fetchApps(completion: @escaping ([(bundleID: String, name: String)]) -> Void) {
         sendRequest(eventName: "FetchLaunchableApplicationsEvent", content: .dict([]), responseHandler: { response in

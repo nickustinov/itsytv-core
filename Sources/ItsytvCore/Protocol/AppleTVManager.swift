@@ -88,6 +88,10 @@ public final class AppleTVManager {
     public var connectionStatus: ConnectionStatus = .disconnected
     public var discoveredDevices: [AppleTVDevice] = []
     public var connectedDeviceName: String?
+    /// Apple TV `tvOS` version reported in the `_systemInfo` reply (e.g. "26.5.0").
+    /// `nil` until the handshake completes. Drives empty-state messaging in
+    /// the apps grid since tvOS 26.5 beta silently drops the app-list fetch.
+    public var osVersion: String?
     public var isScanning = false
     public var installedApps: [(bundleID: String, name: String)] = []
     public var keyboardFocused = false
@@ -245,6 +249,7 @@ public final class AppleTVManager {
         companionRetryCount = 0
         isReconnecting = false
         installedApps = []
+        osVersion = nil
         if clearPendingCommands {
             pendingCompanionCommands.removeAll()
         }
@@ -732,8 +737,36 @@ public final class AppleTVManager {
     }
 
     private func startSession() {
+        fetchOSVersion()
         startCompanionSession()
         startMRPViaTunnel()
+    }
+
+    /// Fire-and-forget `_systemInfo` to read the device's `_osV`. We don't
+    /// gate session start on this — the version is informational only, used
+    /// by the UI to surface a tvOS-26.5-beta-specific empty state.
+    private func fetchOSVersion() {
+        guard let credentials = currentCredentials else { return }
+        connection?.sendSystemInfo(
+            clientID: credentials.clientID,
+            clientPublicKey: credentials.clientLTPK,
+            deviceModel: Self.hardwareModel
+        ) { [weak self] response in
+            guard let osV = response["_c"]?["_osV"]?.stringValue else { return }
+            log.info("Apple TV osVersion=\(osV)")
+            DispatchQueue.main.async { self?.osVersion = osV }
+        }
+    }
+
+    /// iPhone hardware identifier (e.g. "iPhone17,1"). Sent in `_systemInfo`
+    /// as the `model` field; tvOS uses it for client-side display only.
+    private static var hardwareModel: String {
+        var size = 0
+        sysctlbyname("hw.machine", nil, &size, nil, 0)
+        guard size > 0 else { return "iPhone17,1" }
+        var bytes = [CChar](repeating: 0, count: size)
+        sysctlbyname("hw.machine", &bytes, &size, nil, 0)
+        return String(cString: bytes)
     }
 
     private func startCompanionSession() {
