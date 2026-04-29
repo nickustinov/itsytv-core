@@ -786,11 +786,24 @@ public final class AppleTVManager {
                     self?.textInputSessionUUID = result.sessionUUID
                 }
             }
-            DispatchQueue.main.async {
-                self?.connectionStatus = .connected
-                self?.discovery.pause()
-                self?.flushPendingCompanionCommands()
-                self?.fetchApps()
+            // tvOS 26.5+ silently drops FetchLaunchableApplicationsEvent
+            // unless we register a TV-remote-control session first. On older
+            // tvOS the device replies harmlessly or ignores it — the 2 s
+            // timeout below makes sure we still proceed in either case.
+            var didProceed = false
+            let proceed: () -> Void = { [weak self] in
+                DispatchQueue.main.async {
+                    guard !didProceed else { return }
+                    didProceed = true
+                    self?.connectionStatus = .connected
+                    self?.discovery.pause()
+                    self?.flushPendingCompanionCommands()
+                    self?.fetchApps()
+                }
+            }
+            self?.connection?.startTVRCSession { proceed() }
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 2) {
+                proceed()
             }
         }
     }

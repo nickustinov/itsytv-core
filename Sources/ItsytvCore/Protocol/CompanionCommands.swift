@@ -147,6 +147,23 @@ extension CompanionConnection {
         )
     }
 
+    /// Register a TV Remote Control session. Required precondition for
+    /// tvOS 26.5+ to serve `FetchLaunchableApplicationsEvent` and
+    /// `FetchAttentionState`; without this call the launcher daemon
+    /// silently drops those requests. Older tvOS either responds with empty
+    /// content or ignores it — either way the rest of the flow keeps working.
+    ///
+    /// Discovered by pyatv: https://github.com/postlund/pyatv/pull/2847
+    func startTVRCSession(completion: @escaping () -> Void) {
+        sendRequest(
+            eventName: "TVRCSessionStart",
+            content: .dictionary([
+                ("ProtocolVersionKey", .string("1.2")),
+            ]),
+            responseHandler: { _ in completion() }
+        )
+    }
+
     /// Fetch the list of launchable applications.
     func fetchApps(completion: @escaping ([(bundleID: String, name: String)]) -> Void) {
         sendRequest(eventName: "FetchLaunchableApplicationsEvent", content: .dict([]), responseHandler: { response in
