@@ -162,6 +162,12 @@ public final class AppleTVManager {
         return true
     }
 
+    /// Device ID of the most recently connected Apple TV (persisted across
+    /// launches), or `nil` if none has ever connected.
+    public var lastConnectedDeviceID: String? {
+        LastConnectedDeviceStorage.load()?.id
+    }
+
     private func connect(to device: AppleTVDevice, preservingPendingCommands: Bool) {
         disconnect(clearPendingCommands: !preservingPendingCommands)
         connectionStatus = .connecting
