@@ -8,6 +8,8 @@
 
 Swift package implementing the Apple TV Companion Link and AirPlay 2 protocols. Powers [itsytv for macOS](https://github.com/nickustinov/itsytv-macos) and itsytv for iOS.
 
+If you want to control an Apple TV from Swift – discover it over Bonjour, pair with a PIN, send remote button presses, type into text fields, read now-playing state, or launch apps – this is a native implementation of the same MediaRemote (MRP) and Companion protocols the Siri Remote uses, with no Python or cloud dependency. It is the Swift counterpart to what [pyatv](https://github.com/postlund/pyatv) does for Python.
+
 ## What it does
 
 - **Device discovery** – finds Apple TVs on the local network via Bonjour
@@ -75,6 +77,11 @@ let manager = AppleTVManager()
 ```bash
 swift test
 ```
+
+## Used by
+
+- [Itsytv for macOS](https://github.com/nickustinov/itsytv-macos) – open source menu bar remote (`brew install --cask itsytv`)
+- [Itsytv for iOS and iPadOS](https://itsytv.app) – touch-screen Apple TV remote on the App Store
 
 ## License
 
