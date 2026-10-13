@@ -54,6 +54,7 @@ final class CompanionConnection {
     }
 
     func connectToService(name: String) {
+        log.info("Connecting to service \(name)")
         let endpoint = NWEndpoint.service(
             name: name,
             type: "_companion-link._tcp",
@@ -97,6 +98,7 @@ final class CompanionConnection {
 
     /// Send a raw frame. If encryption is active, encrypts the payload.
     func send(frame: CompanionFrame, completion: ((Swift.Error?) -> Void)? = nil) {
+        log.debug("Sending frame: type=\(String(describing: frame.type)) payload=\(frame.payload.count) bytes")
         var wireData: Data
 
         if let crypto, !frame.payload.isEmpty {

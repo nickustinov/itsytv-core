@@ -168,7 +168,11 @@ public final class AppleTVManager {
         LastConnectedDeviceStorage.load()?.id
     }
 
-    private func connect(to device: AppleTVDevice, preservingPendingCommands: Bool) {
+    private func connect(
+        to device: AppleTVDevice,
+        preservingPendingCommands: Bool,
+        credentials: HAPCredentials? = nil
+    ) {
         disconnect(clearPendingCommands: !preservingPendingCommands)
         connectionStatus = .connecting
         self.connectedDevice = device
@@ -208,7 +212,7 @@ public final class AppleTVManager {
         }
 
         // Check for stored credentials (keyed by rpBA)
-        if let credentials = KeychainStorage.load(for: device.id) {
+        if let credentials = credentials ?? KeychainStorage.load(for: device.id) {
             // Already paired — do pair-verify when connection is ready
             self.currentCredentials = credentials
             connectedDeviceName = device.name
@@ -640,8 +644,13 @@ public final class AppleTVManager {
                     }
                 }
 
-                self.currentCredentials = credentials
-                startPairVerify(credentials: credentials)
+                // tvOS 27 ignores pair-verify on the pair-setup connection and
+                // only closes it ~30 s later, so verify on a fresh connection
+                // (as pyatv does).
+                guard let device = connectedDevice else { return }
+                DispatchQueue.main.async {
+                    self.connect(to: device, preservingPendingCommands: true, credentials: credentials)
+                }
             } catch {
                 log.error("Pair-setup M6 failed: \(error.localizedDescription)")
                 DispatchQueue.main.async {
