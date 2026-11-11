@@ -309,6 +309,25 @@ public final class AppleTVManager {
         }
     }
 
+    /// Button currently held down from the keyboard (between `pressDown` and `release`).
+    public var heldButton: CompanionButton?
+
+    /// Real press-and-hold: the button goes down now and stays down until `release`,
+    /// so the Apple TV itself decides between a click and a hold – like the Siri Remote.
+    public func pressDown(_ button: CompanionButton) {
+        heldButton = button
+        performOrQueueCompanionCommand { [weak self] in
+            self?.connection?.sendButtonDown(button)
+        }
+    }
+
+    public func release(_ button: CompanionButton) {
+        if heldButton == button { heldButton = nil }
+        performOrQueueCompanionCommand { [weak self] in
+            self?.connection?.sendButtonUp(button)
+        }
+    }
+
     /// Send a touchpad swipe in the given direction, scaled by travel fraction (0–1).
     public func swipe(_ direction: SwipeDirection, fraction: CGFloat = 0.5) {
         performOrQueueCompanionCommand { [weak self] in

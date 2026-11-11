@@ -69,14 +69,14 @@ extension CompanionConnection {
         }
     }
 
-    private func sendButtonDown(_ button: CompanionButton) {
+    func sendButtonDown(_ button: CompanionButton) {
         sendRequest(eventName: "_hidC", content: .dictionary([
             ("_hBtS", .int(1)),
             ("_hidC", .int(button.rawValue)),
         ]))
     }
 
-    private func sendButtonUp(_ button: CompanionButton, completion: ((Swift.Error?) -> Void)? = nil) {
+    func sendButtonUp(_ button: CompanionButton, completion: ((Swift.Error?) -> Void)? = nil) {
         sendRequest(eventName: "_hidC", content: .dictionary([
             ("_hBtS", .int(2)),
             ("_hidC", .int(button.rawValue)),
