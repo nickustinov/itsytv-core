@@ -5,6 +5,9 @@ public enum ConnectionStatus: Equatable {
     case connecting
     case pairing
     case connected
+    /// The system blocks local network access, so the Apple TV can't be reached. The
+    /// connection waits and goes on by itself once the user allows access in Settings.
+    case localNetworkDenied
     case error(String)
 }
 

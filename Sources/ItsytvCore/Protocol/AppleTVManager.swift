@@ -211,32 +211,42 @@ public final class AppleTVManager {
             self?.handleFrame(frame)
         }
 
+        conn.onLocalNetworkDenied = { [weak self] in
+            DispatchQueue.main.async {
+                self?.connectionStatus = .localNetworkDenied
+            }
+        }
+
         // Check for stored credentials (keyed by rpBA)
+        let startSession: () -> Void
         if let credentials = credentials ?? KeychainStorage.load(for: device.id) {
             // Already paired — do pair-verify when connection is ready
             self.currentCredentials = credentials
-            connectedDeviceName = device.name
-
-            conn.onConnect = { [weak self] in
+            startSession = { [weak self] in
                 self?.startPairVerify(credentials: credentials)
             }
-            conn.connectToService(name: device.name)
         } else {
-            // Need to pair first
-            connectedDeviceName = device.name
-            DispatchQueue.main.async {
-                self.connectionStatus = .pairing
-            }
-
-            conn.onConnect = { [weak self] in
+            // Need to pair first. The status stays `.connecting` until the Apple TV answers M1
+            // (M2, when it shows the PIN) – a PIN prompt before that could wait forever.
+            startSession = { [weak self] in
                 guard let self, let conn = self.connection else { return }
                 let setup = PairSetup(connection: conn)
                 self.pairSetup = setup
                 let m1Frame = setup.startPairing()
                 conn.send(frame: m1Frame)
             }
-            conn.connectToService(name: device.name)
         }
+
+        conn.onConnect = { [weak self] in
+            // Ready after a local network denial means the user allowed access in the meantime.
+            DispatchQueue.main.async {
+                if self?.connectionStatus == .localNetworkDenied {
+                    self?.connectionStatus = .connecting
+                }
+            }
+            startSession()
+        }
+        conn.connectToService(name: device.name)
     }
 
     public func disconnect() {
@@ -878,7 +888,8 @@ public final class AppleTVManager {
         if connectionStatus == .connected, connection != nil {
             return true
         }
-        if connectionStatus == .connecting || connectionStatus == .pairing {
+        // A connection is under way – a denied one keeps waiting for local network access.
+        if connectionStatus == .connecting || connectionStatus == .pairing || connectionStatus == .localNetworkDenied {
             return true
         }
 

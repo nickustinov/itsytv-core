@@ -1,4 +1,5 @@
 import XCTest
+import Network
 @testable import ItsytvCore
 
 final class CompanionConnectionTests: XCTestCase {
@@ -83,5 +84,36 @@ final class CompanionConnectionTests: XCTestCase {
         // After disconnect, pending handlers should be cleared
         let found = conn.dispatchResponse(xid: Int64(xid), message: .null)
         XCTAssertFalse(found)
+    }
+
+    // MARK: - Local network denial
+
+    func testWaitingIsLocalNetworkDeniedWhenPathSaysSo() {
+        XCTAssertTrue(CompanionConnection.isLocalNetworkDenied(
+            .posix(.ENETUNREACH),
+            unsatisfiedReason: .localNetworkDenied
+        ))
+    }
+
+    func testWaitingIsLocalNetworkDeniedWhenBonjourPolicyDenies() {
+        XCTAssertTrue(CompanionConnection.isLocalNetworkDenied(
+            .dns(DNSServiceErrorType(kDNSServiceErr_PolicyDenied)),
+            unsatisfiedReason: nil
+        ))
+    }
+
+    func testWaitingForOtherReasonsIsNotLocalNetworkDenied() {
+        XCTAssertFalse(CompanionConnection.isLocalNetworkDenied(
+            .posix(.ECONNREFUSED),
+            unsatisfiedReason: nil
+        ))
+        XCTAssertFalse(CompanionConnection.isLocalNetworkDenied(
+            .posix(.ENETDOWN),
+            unsatisfiedReason: .notAvailable
+        ))
+        XCTAssertFalse(CompanionConnection.isLocalNetworkDenied(
+            .dns(DNSServiceErrorType(kDNSServiceErr_NoSuchRecord)),
+            unsatisfiedReason: nil
+        ))
     }
 }

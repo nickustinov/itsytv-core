@@ -18,20 +18,38 @@ final class CompanionConnection {
     var onFrame: ((CompanionFrame) -> Void)?
     var onConnect: (() -> Void)?
     var onDisconnect: ((Swift.Error?) -> Void)?
+    /// The system blocks local network access for this app. The connection keeps waiting and
+    /// goes on by itself (`onConnect`) once the user allows access.
+    var onLocalNetworkDenied: (() -> Void)?
 
     init() {
         nextXID = Int64.random(in: 1...10000)
     }
 
+    /// Whether a connection waits because local network access is denied – either the path
+    /// says so or the Bonjour resolve was refused (TN3179, "Check for local network access").
+    static func isLocalNetworkDenied(_ error: NWError, unsatisfiedReason: NWPath.UnsatisfiedReason?) -> Bool {
+        if case .localNetworkDenied? = unsatisfiedReason { return true }
+        if case .dns(let code) = error, code == DNSServiceErrorType(kDNSServiceErr_PolicyDenied) { return true }
+        return false
+    }
+
     func connect(to endpoint: NWEndpoint) {
         let connection = NWConnection(to: endpoint, using: .tcp)
 
-        connection.stateUpdateHandler = { [weak self] state in
+        connection.stateUpdateHandler = { [weak self, weak connection] state in
             switch state {
             case .ready:
                 log.info("Connection ready")
                 self?.onConnect?()
                 self?.startReceiving()
+            case .waiting(let error):
+                guard Self.isLocalNetworkDenied(error, unsatisfiedReason: connection?.currentPath?.unsatisfiedReason) else {
+                    log.info("Connection waiting: \(error.localizedDescription)")
+                    return
+                }
+                log.warning("Local network access denied – waiting for the user to allow it")
+                self?.onLocalNetworkDenied?()
             case .failed(let error):
                 self?.onDisconnect?(error)
             case .cancelled:
